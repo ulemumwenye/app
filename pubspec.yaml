@@ -1,0 +1,49 @@
+name: nation_online
+description: "A Flutter app for fetching and displaying news articles from a WordPress website."
+
+publish_to: 'none' 
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.6.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^0.13.3
+  provider: ^6.0.0
+  flutter_riverpod: ^2.0.0
+  cached_network_image: ^3.2.0
+  intl: ^0.17.0
+  carousel_slider: ^4.2.1
+  cupertino_icons: ^1.0.8
+  url_launcher: ^6.1.11
+  flutter_html: ^3.0.0-beta.2
+  shared_preferences: ^2.0.11
+  shimmer: ^3.0.0  # Updated to latest version
+  pull_to_refresh: ^2.0.0
+  flutter_native_splash: ^2.4.4  # Removed duplicate
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/logo.png
+    - assets/placeholder.png
+    - assets/facebook.png
+    - assets/twitter.png
+    - assets/instagram.png
+    - assets/tik-tok.png
+    - assets/whatsapp.png
+
+flutter_native_splash:
+  color: "#ffffff"
+  image: assets/placeholder.png
+  android: true
+  ios: true
