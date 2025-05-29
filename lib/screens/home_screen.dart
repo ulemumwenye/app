@@ -12,8 +12,13 @@ import '../screens/post_search_delegate.dart';
 
 class HomeScreen extends StatefulWidget {
   final bool darkMode;
+  final VoidCallback onToggleTheme; // Added callback
 
-  const HomeScreen({super.key, required this.darkMode});
+  const HomeScreen({
+    super.key,
+    required this.darkMode,
+    required this.onToggleTheme, // Added callback to constructor
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -319,9 +324,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     print('Fetched Categories: $categories');
     print('Filtered Categories: $mainCategoryList');
 
+    final ThemeData theme = Theme.of(context);
+    final bool isDark = theme.brightness == Brightness.dark;
+
     return Container(
-      height: 60,
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      height: 68, // Adjusted height
+      padding: const EdgeInsets.symmetric(vertical: 12.0), // Adjusted padding
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: theme.dividerColor, width: 1.0)),
+      ),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: mainCategoryList.length,
@@ -329,14 +340,32 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           final category = mainCategoryList[index];
           final isSelected = _selectedCategoryId == category.id;
           return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10), // Increased horizontal padding
+            padding: const EdgeInsets.symmetric(horizontal: 8), // Slightly reduced outer padding to accommodate larger chips
             child: ChoiceChip(
               label: Text(category.name),
               selected: isSelected,
               onSelected: (_) => _onCategorySelected(category.id),
-              backgroundColor: Colors.grey[200],
-              selectedColor: Colors.blue,
-              labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black),
+              showCheckmark: false,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              labelStyle: isSelected
+                  ? TextStyle(
+                      color: theme.colorScheme.onPrimary, // Ensures contrast with primaryColor
+                      fontWeight: FontWeight.bold,
+                    )
+                  : TextStyle(
+                      color: theme.textTheme.bodyLarge?.color?.withOpacity(0.8),
+                    ),
+              selectedColor: theme.primaryColor,
+              backgroundColor: theme.chipTheme.backgroundColor ?? (isDark ? Colors.grey.shade700 : Colors.grey.shade200),
+              shape: isSelected
+                  ? const StadiumBorder()
+                  : StadiumBorder(
+                      side: BorderSide(
+                        color: theme.colorScheme.outline.withOpacity(0.5),
+                      ),
+                    ),
+              elevation: isSelected ? 2.0 : 0.0,
+              selectedShadowColor: Colors.black.withOpacity(0.2),
             ),
           );
         },
@@ -398,17 +427,43 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context); // Get theme for convenience
+
     return Scaffold(
       appBar: AppBar(
+        elevation: 0.0, // Set elevation to 0
         title: RichText(
-          text: const TextSpan(
+          text: TextSpan(
             children: [
-              TextSpan(text: 'Nation', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black)),
-              TextSpan(text: ' Online', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.blue)),
+              TextSpan(
+                text: 'Nation',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: theme.textTheme.titleLarge?.color, // Theme-aware color
+                ),
+              ),
+              const TextSpan(
+                text: ' Online',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue, // Accent color
+                ),
+              ),
             ],
           ),
         ),
         actions: [
+          IconButton( // Added Theme Toggle IconButton
+            icon: Icon(
+              Theme.of(context).brightness == Brightness.dark 
+                  ? Icons.light_mode 
+                  : Icons.dark_mode,
+            ),
+            onPressed: widget.onToggleTheme,
+            tooltip: 'Toggle Theme',
+          ),
           IconButton(
             icon: const Icon(Icons.search),
             onPressed: () {
@@ -624,44 +679,45 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                 children: [
                                   Text(
                                     post.title,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
-                                      color: Colors.black87,
+                                      color: theme.textTheme.titleMedium?.color, // Theme-aware color
                                     ),
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                  const SizedBox(height: 10), // Increased spacing
+                                  const SizedBox(height: 10), 
                                   Text(
                                     post.excerpt,
                                     style: TextStyle(
                                       fontSize: 14,
-                                      color: Colors.grey[600],
+                                      color: theme.textTheme.bodyMedium?.color?.withOpacity(0.8), // Theme-aware color
+                                      height: 1.4, // Added line height
                                     ),
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                  const SizedBox(height: 16), // Increased spacing
+                                  const SizedBox(height: 16), 
                                   Row(
                                     children: [
-                                      Icon(Icons.calendar_today, size: 14, color: Colors.grey[600]),
+                                      Icon(Icons.calendar_today, size: 14, color: theme.textTheme.bodySmall?.color?.withOpacity(0.7)), // Theme-aware icon color
                                       const SizedBox(width: 4),
                                       Text(
                                         'Oct 10, 2023', // Replace with actual post date
                                         style: TextStyle(
                                           fontSize: 12,
-                                          color: Colors.grey[600],
+                                          color: theme.textTheme.bodySmall?.color?.withOpacity(0.7), // Theme-aware color
                                         ),
                                       ),
                                       const SizedBox(width: 16),
-                                      Icon(Icons.person, size: 14, color: Colors.grey[600]),
+                                      Icon(Icons.person, size: 14, color: theme.textTheme.bodySmall?.color?.withOpacity(0.7)), // Theme-aware icon color
                                       const SizedBox(width: 4),
                                       Text(
                                         'Author Name', // Replace with actual author name
                                         style: TextStyle(
                                           fontSize: 12,
-                                          color: Colors.grey[600],
+                                          color: theme.textTheme.bodySmall?.color?.withOpacity(0.7), // Theme-aware color
                                         ),
                                       ),
                                     ],
@@ -675,7 +731,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     ),
                   );
                 },
-                childCount: _posts.length + (_isLoading ? 1 : 0), // Add 1 for loading indicator if _isLoading
+                childCount: _posts.length + (_isLoading ? 1 : 0), 
               ),
             ),
           ],
