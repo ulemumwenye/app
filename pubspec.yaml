@@ -23,6 +23,7 @@ dependencies:
   shimmer: ^3.0.0  # Updated to latest version
   pull_to_refresh: ^2.0.0
   flutter_native_splash: ^2.4.4  # Removed duplicate
+  flutter_spinkit: ^5.2.0 # Added flutter_spinkit
 
 dev_dependencies:
   flutter_test:

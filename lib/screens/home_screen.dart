@@ -1,5 +1,7 @@
 import 'dart:async'; // Import for Timer
+import 'package:cached_network_image/cached_network_image.dart'; // Added import
 import 'package:flutter/material.dart';
+import 'package:flutter_spinkit/flutter_spinkit.dart'; // Import for SpinKit
 import 'package:shimmer/shimmer.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/category.dart';
@@ -41,7 +43,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       print('Fetched Categories: $categories'); // Debugging: Print fetched categories
       return categories;
     });
-    _featuredPostsFuture = _fetchFeaturedPosts();
+    _featuredPostsFuture = _fetchFeaturedPosts().then((posts) {
+      // Pre-cache the first few images after they are fetched
+      if (posts.isNotEmpty && mounted) {
+        // Ensure the widget is still in the tree
+        for (int i = 0; i < posts.length && i < 3; i++) { // Pre-cache up to 3 images
+          precacheImage(
+            CachedNetworkImageProvider(posts[i].imageUrl),
+            context,
+            onError: (e, stackTrace) { // Optional error handling for pre-caching
+              print('Error precaching image ${posts[i].imageUrl}: $e');
+            },
+          );
+        }
+      }
+      return posts; // Return the posts for the FutureBuilder
+    });
     _loadPosts();
     _startAutoSlide(); // Start auto-slide
 
@@ -87,11 +104,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Future<List<Post>> _fetchFeaturedPosts() async {
-    return _wordPressService.fetchPosts(
+    final posts = await _wordPressService.fetchPosts(
       categoryId: 25, // Fetch posts only from category 25
       page: 1,
       perPage: 5, // Fetch 5 featured posts
     );
+    // Log image URLs for investigation
+    for (var post in posts) {
+      print('Featured Post Image URL: ${post.imageUrl}');
+    }
+    return posts;
   }
 
   Future<void> _loadPosts() async {
@@ -247,14 +269,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   context,
                   MaterialPageRoute(builder: (context) => PostDetailScreen(post: post)),
                 ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    post.imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: Colors.grey[200],
-                      child: const Icon(Icons.error),
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 4.0),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: CachedNetworkImage(
+                      imageUrl: post.imageUrl,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Center(child: CircularProgressIndicator()),
+                      errorWidget: (context, url, error) => Container(
+                        color: Colors.grey[100],
+                        child: Icon(Icons.image_not_supported_outlined, color: Colors.grey[400], size: 48),
+                      ),
                     ),
                   ),
                 ),
@@ -262,7 +288,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             },
           ),
           Positioned(
-            bottom: 10,
+            bottom: 12, // Slightly increased bottom padding
             child: Row(
               children: List.generate(posts.length, (index) {
                 return Container(
@@ -303,7 +329,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           final category = mainCategoryList[index];
           final isSelected = _selectedCategoryId == category.id;
           return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10), // Increased horizontal padding
             child: ChoiceChip(
               label: Text(category.name),
               selected: isSelected,
@@ -323,7 +349,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12), // Increased vertical padding
           child: Text(
             'Popular Articles',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -342,9 +368,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   MaterialPageRoute(builder: (context) => PostDetailScreen(post: post)),
                 ),
                 child: Card(
-                  elevation: 4,
+                  elevation: 2, // Reduced elevation
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: Colors.grey.shade300, width: 0.5), // Added subtle border
                   ),
                   margin: const EdgeInsets.symmetric(horizontal: 8),
                   child: ClipRRect(
@@ -355,8 +382,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => Container(
                         width: 120,
-                        color: Colors.grey[200],
-                        child: const Icon(Icons.error, color: Colors.grey),
+                        color: Colors.grey[100], // Lighter background for error
+                        child: Icon(Icons.image_not_supported_outlined, color: Colors.grey[400], size: 40), // Softer error icon
                       ),
                     ),
                   ),
@@ -366,29 +393,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildShimmerEffect() {
-    return GridView.builder(
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 8.0,
-        mainAxisSpacing: 8.0,
-        childAspectRatio: 0.8,
-      ),
-      padding: const EdgeInsets.all(8.0),
-      itemCount: 6,
-      itemBuilder: (context, index) {
-        return Shimmer.fromColors(
-          baseColor: Colors.grey[300]!,
-          highlightColor: Colors.grey[100]!,
-          child: Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
-            child: Container(color: Colors.white),
-          ),
-        );
-      },
     );
   }
 
@@ -473,103 +477,121 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           children: [
             Image.asset('assets/placeholder.png', width: 100, height: 100), // Splash screen image
             const SizedBox(height: 16),
-            const CircularProgressIndicator(),
+            SpinKitFadingCircle( // Replaced CircularProgressIndicator
+              color: Theme.of(context).primaryColor,
+              size: 50.0,
+            ),
           ],
         ),
       )
-          : Column(
-        children: [
-          FutureBuilder<List<Post>>(
-            future: _featuredPostsFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
-              }
-              if (snapshot.hasError) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.error, color: Colors.red, size: 48),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Failed to load featured posts. Please try again.',
-                        style: TextStyle(color: Colors.grey[600]),
+          : RefreshIndicator(
+        onRefresh: () async {
+          setState(() {
+            _posts.clear();
+            _page = 1;
+            _featuredPostsFuture = _fetchFeaturedPosts(); // Refresh featured posts
+          });
+          await _loadPosts();
+        },
+        child: CustomScrollView(
+          controller: _scrollController,
+          slivers: [
+            SliverToBoxAdapter(
+              child: FutureBuilder<List<Post>>(
+                future: _featuredPostsFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
+                  }
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.error, color: Colors.red, size: 48),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Failed to load featured posts. Please try again.',
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: () {
+                              setState(() {
+                                _featuredPostsFuture = _fetchFeaturedPosts();
+                              });
+                            },
+                            child: const Text('Retry'),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: () {
-                          setState(() {
-                            _featuredPostsFuture = _fetchFeaturedPosts();
-                          });
-                        },
-                        child: const Text('Retry'),
+                    );
+                  }
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) return const SizedBox.shrink();
+                  return _buildFeaturedSlider(snapshot.data!);
+                },
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: FutureBuilder<List<Category>>(
+                future: _futureCategories,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.error, color: Colors.red, size: 48),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Failed to load categories. Please try again.',
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: () {
+                              setState(() {
+                                _futureCategories = _wordPressService.fetchCategories();
+                              });
+                            },
+                            child: const Text('Retry'),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                );
-              }
-              if (!snapshot.hasData || snapshot.data!.isEmpty) return const SizedBox.shrink();
-              return _buildFeaturedSlider(snapshot.data!);
-            },
-          ),
-          FutureBuilder<List<Category>>(
-            future: _futureCategories,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (snapshot.hasError) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.error, color: Colors.red, size: 48),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Failed to load categories. Please try again.',
-                        style: TextStyle(color: Colors.grey[600]),
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: () {
-                          setState(() {
-                            _futureCategories = _wordPressService.fetchCategories();
-                          });
-                        },
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                );
-              }
-              if (!snapshot.hasData || snapshot.data!.isEmpty) return const SizedBox.shrink();
-              return _buildCategoryTabBar(snapshot.data!);
-            },
-          ),
-          _buildPopularArticles(_posts.sublist(0, 5)), // Display first 5 posts as popular
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: () async {
-                setState(() {
-                  _posts.clear();
-                  _page = 1;
-                  _featuredPostsFuture = _fetchFeaturedPosts(); // Refresh featured posts
-                });
-                await _loadPosts();
-              },
-              child: ListView.builder(
-                controller: _scrollController,
-                padding: const EdgeInsets.all(8),
-                itemCount: _posts.length,
-                itemBuilder: (context, index) {
+                    );
+                  }
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) return const SizedBox.shrink();
+                  return _buildCategoryTabBar(snapshot.data!);
+                },
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: _buildPopularArticles(
+                _posts.isNotEmpty 
+                    ? _posts.sublist(0, (_posts.length < 5 ? _posts.length : 5)) 
+                    : [],
+              ), // Display first 5 posts as popular or fewer if not enough posts
+            ),
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  // If _isLoading is true and we are at the end of the list, show a loading indicator
+                  if (index == _posts.length) {
+                    return _isLoading 
+                        ? const Center(child: CircularProgressIndicator()) 
+                        : const SizedBox.shrink(); // Or some other placeholder
+                  }
                   final post = _posts[index];
                   return FadeTransition(
                     opacity: _fadeAnimation,
                     child: Card(
-                      elevation: 4,
+                      elevation: 2, // Reduced elevation
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: Colors.grey.shade300, width: 0.5), // Added subtle border
                       ),
                       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                       child: InkWell(
@@ -590,8 +612,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, __, ___) => Container(
                                   height: 150,
-                                  color: Colors.grey[200],
-                                  child: const Icon(Icons.error, color: Colors.grey),
+                                  color: Colors.grey[100], // Lighter background for error
+                                  child: Icon(Icons.image_not_supported_outlined, color: Colors.grey[400], size: 48), // Softer error icon
                                 ),
                               ),
                             ),
@@ -610,7 +632,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: 10), // Increased spacing
                                   Text(
                                     post.excerpt,
                                     style: TextStyle(
@@ -620,7 +642,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                  const SizedBox(height: 12),
+                                  const SizedBox(height: 16), // Increased spacing
                                   Row(
                                     children: [
                                       Icon(Icons.calendar_today, size: 14, color: Colors.grey[600]),
@@ -653,10 +675,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     ),
                   );
                 },
+                childCount: _posts.length + (_isLoading ? 1 : 0), // Add 1 for loading indicator if _isLoading
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
