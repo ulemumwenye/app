@@ -17,7 +17,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin { // Changed to TickerProviderStateMixin
   final WordPressService _wordPressService = WordPressService();
   late Future<List<Category>> _futureCategories;
   late Future<List<Post>> _featuredPostsFuture;
@@ -26,10 +26,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   final ScrollController _scrollController = ScrollController(); // For back-to-top button
   late AnimationController _animationController; // For animations
   late Animation<double> _fadeAnimation; // For fade-in animations
+  late AnimationController _glowAnimationController; // For glow animation
+  late Animation<double> _glowAnimation; // For glow animation
 
   int _page = 1;
   bool _isLoading = false;
   int? _selectedCategoryId;
+  String? _selectedCategoryName; // Added to store selected category name
   int _selectedIndex = 0;
   int _currentPage = 0;
   Timer? _timer; // Timer for auto-slide
@@ -39,6 +42,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     super.initState();
     _futureCategories = _wordPressService.fetchCategories().then((categories) {
       print('Fetched Categories: $categories'); // Debugging: Print fetched categories
+      // Set initial selected category
+      if (categories.isNotEmpty) {
+        final mainCategories = ['News', 'National Sports', 'Feature', 'Entertainment', 'Business'];
+        final initialCategory = categories.firstWhere(
+          (category) => mainCategories.contains(category.name),
+          orElse: () => categories.first,
+        );
+        _selectedCategoryId = initialCategory.id;
+        _selectedCategoryName = initialCategory.name;
+      }
       return categories;
     });
     _featuredPostsFuture = _fetchFeaturedPosts();
@@ -52,6 +65,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
     _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(_animationController);
     _animationController.forward(); // Start the animation
+
+    // Initialize glow animation controller
+    _glowAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500), // Duration for one pulse cycle
+    )..repeat(reverse: true); // Repeat the animation, reversing it each time
+
+    _glowAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _glowAnimationController, curve: Curves.easeInOut),
+    );
   }
 
   @override
@@ -60,6 +83,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     _pageController.dispose(); // Dispose the PageController
     _scrollController.dispose(); // Dispose the ScrollController
     _animationController.dispose(); // Dispose the AnimationController
+    _glowAnimationController.dispose(); // Dispose the Glow AnimationController
     super.dispose();
   }
 
@@ -117,12 +141,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     }
   }
 
-  void _onCategorySelected(int categoryId) {
+  void _onCategorySelected(int categoryId, String categoryName) {
     setState(() {
       _selectedCategoryId = categoryId;
+      _selectedCategoryName = categoryName;
       _posts.clear();
       _page = 1;
       _loadPosts();
+      // Optionally, restart glow animation if needed or change its characteristics
+      // _glowAnimationController.reset();
+      // _glowAnimationController.forward();
     });
   }
 
@@ -294,26 +322,54 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     print('Filtered Categories: $mainCategoryList');
 
     return Container(
-      height: 60,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: mainCategoryList.length,
-        itemBuilder: (context, index) {
-          final category = mainCategoryList[index];
-          final isSelected = _selectedCategoryId == category.id;
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: ChoiceChip(
-              label: Text(category.name),
-              selected: isSelected,
-              onSelected: (_) => _onCategorySelected(category.id),
-              backgroundColor: Colors.grey[200],
-              selectedColor: Colors.blue,
-              labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black),
+      height: 60, // Adjust height as needed
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          if (_selectedCategoryName != null)
+            AnimatedBuilder(
+              animation: _glowAnimation,
+              builder: (context, child) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1 + _glowAnimation.value * 0.2), // Subtle blue background
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.blue.withOpacity(_glowAnimation.value * 0.5), // Pulsing glow
+                        blurRadius: 5 + _glowAnimation.value * 10,
+                        spreadRadius: 1 + _glowAnimation.value * 2,
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    _selectedCategoryName!,
+                    style: const TextStyle(
+                      color: Colors.blue,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                );
+              },
             ),
-          );
-        },
+          PopupMenuButton<Category>(
+            icon: const Icon(Icons.arrow_drop_down, size: 30), // Dropdown icon
+            onSelected: (Category category) {
+              _onCategorySelected(category.id, category.name);
+            },
+            itemBuilder: (BuildContext context) {
+              return mainCategoryList.map((Category category) {
+                return PopupMenuItem<Category>(
+                  value: category,
+                  child: Text(category.name),
+                );
+              }).toList();
+            },
+          ),
+        ],
       ),
     );
   }
