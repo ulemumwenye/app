@@ -8,6 +8,7 @@ import '../models/post.dart';
 import '../services/wordpress_service.dart';
 import '../screens/post_detail_screen.dart';
 import '../screens/post_search_delegate.dart';
+import '../widgets/rotating_splash_image.dart'; // Import the new widget
 
 class HomeScreen extends StatefulWidget {
   final bool darkMode;
@@ -426,10 +427,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       fit: BoxFit.cover,
                       memCacheHeight: (200 * MediaQuery.of(context).devicePixelRatio).round(),
                       memCacheWidth: ((MediaQuery.of(context).size.width * 0.9) * MediaQuery.of(context).devicePixelRatio).round(),
-                      placeholder: (context, url) => Container(
-                        color: Colors.grey[200],
-                        child: const Center(child: CircularProgressIndicator()),
-                      ),
+                      placeholder: (context, url) => const Center(child: RotatingSplashImage(size: 40.0)),
                       errorWidget: (context, url, error) => Container(
                         color: Colors.grey[200],
                         child: const Icon(Icons.error),
@@ -465,7 +463,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     // Uses _mainCategoryList which is now a state variable, populated by _setupTabController
     if (_tabController == null || _mainCategoryList.isEmpty) {
       // Show a loader or an empty container while categories are being fetched and processed
-      return Container(height: 60, child: Center(child: CircularProgressIndicator()));
+      return Container(height: 60, child: const Center(child: RotatingSplashImage(size: 30.0)));
     }
 
     // Debugging: Print the fetched and filtered categories
@@ -528,15 +526,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   margin: const EdgeInsets.symmetric(horizontal: 8),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.network(
-                      post.imageUrl,
+                    child: CachedNetworkImage(
+                      imageUrl: post.imageUrl,
                       width: 120,
+                      height: double.infinity, // Height is determined by parent SizedBox (150)
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
+                      placeholder: (context, url) => const SizedBox(
                         width: 120,
-                        color: Colors.grey[200],
-                        child: const Icon(Icons.error, color: Colors.grey),
+                        height: 150, // Match the SizedBox height for popular articles
+                        child: Center(child: RotatingSplashImage(size: 30.0)),
                       ),
+                      errorWidget: (context, url, error) => Container(
+                        width: 120,
+                        height: 150, // Match the SizedBox height
+                        color: Colors.grey[200],
+                        child: const Center(child: Icon(Icons.error, color: Colors.grey, size: 30.0)),
+                      ),
+                      memCacheHeight: (150 * MediaQuery.of(context).devicePixelRatio).round(),
+                      memCacheWidth: (120 * MediaQuery.of(context).devicePixelRatio).round(),
                     ),
                   ),
                 ),
@@ -617,7 +624,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           future: _futureCategories,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return const Center(child: RotatingSplashImage(size: 40.0));
             }
             if (!snapshot.hasData || snapshot.data!.isEmpty) {
               return const Center(child: Text('No categories found.'));
@@ -662,7 +669,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           children: [
             Image.asset('assets/placeholder.png', width: 100, height: 100), // Splash screen image
             const SizedBox(height: 16),
-            const CircularProgressIndicator(),
+            const RotatingSplashImage(size: 50.0), // Replaced CircularProgressIndicator
           ],
         ),
       )
@@ -672,7 +679,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             future: _featuredPostsFuture,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
+                return const SizedBox(height: 200, child: Center(child: RotatingSplashImage(size: 50.0)));
               }
               if (snapshot.hasError) {
                 return Center(
@@ -706,7 +713,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             future: _futureCategories,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
+                return const Center(child: RotatingSplashImage(size: 40.0));
               }
               if (snapshot.hasError) {
                 return Center(
@@ -780,16 +787,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           children: [
                             ClipRRect(
                               borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                              child: Image.network(
-                                post.imageUrl,
+                              child: CachedNetworkImage(
+                                imageUrl: post.imageUrl,
                                 height: 150,
                                 width: double.infinity,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
-                                  height: 150,
-                                  color: Colors.grey[200],
-                                  child: const Icon(Icons.error, color: Colors.grey),
+                                placeholder: (context, url) => const SizedBox(
+                                  height: 150, // Match image height
+                                  width: double.infinity,
+                                  child: Center(child: RotatingSplashImage(size: 40.0)),
                                 ),
+                                errorWidget: (context, url, error) => Container(
+                                  height: 150, // Match image height
+                                  width: double.infinity,
+                                  color: Colors.grey[200],
+                                  child: const Center(child: Icon(Icons.error, color: Colors.grey, size: 40.0)),
+                                ),
+                                memCacheHeight: (150 * MediaQuery.of(context).devicePixelRatio).round(),
                               ),
                             ),
                             Padding(
