@@ -1,4 +1,5 @@
 import 'dart:async'; // Import for Timer
+import 'package:cached_network_image/cached_network_image.dart'; // Added import
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -107,8 +108,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int? _selectedCategoryId;
   String? _selectedCategoryName; // To store the name of the selected category
   int _selectedIndex = 0;
-  int _currentPage = 0;
+  int _currentPage = 0; // Used by PageView.onPageChanged to track current slider page
   Timer? _timer; // Timer for auto-slide
+  List<Post> _currentFeaturedPosts = []; // Holds current featured posts for the slider
 
   @override
   void initState() {
@@ -124,9 +126,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _loadPosts(); // Load posts for the initial category
       return categories;
     });
+
     _featuredPostsFuture = _fetchFeaturedPosts();
+    _featuredPostsFuture.then((value) {
+      if (mounted) {
+        setState(() {
+          _currentFeaturedPosts = value;
+        });
+        _startAutoSlide(); // Start timer only after featured posts are loaded
+      }
+    }).catchError((error) {
+      print('Error fetching featured posts for timer: $error');
+    });
     // _loadPosts(); // Moved to after _setupTabController to ensure _selectedCategoryId is set
-    _startAutoSlide(); // Start auto-slide
+    // _startAutoSlide(); // Moved to .then() block of _featuredPostsFuture
 
     // Initialize fade animation controller
     _animationController = AnimationController(
@@ -202,25 +215,30 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _startAutoSlide() {
+    _timer?.cancel(); // Cancel any existing timer
+
+    // Guard: Do not start if posts are empty, controller not ready, or no pages.
+    if (_currentFeaturedPosts.isEmpty || !_pageController.hasClients || _pageController.page == null) {
+      return;
+    }
+
+    final itemCount = _currentFeaturedPosts.length;
+    if (itemCount == 0) return; // Should be caught by _currentFeaturedPosts.isEmpty already
+
     _timer = Timer.periodic(const Duration(seconds: 3), (timer) {
-      if (_pageController.hasClients) {
-        final nextPage = _currentPage + 1;
-        if (nextPage >= (_posts.length)) {
-          _pageController.animateToPage(
-            0,
-            duration: const Duration(milliseconds: 300), // Smoother transition
-            curve: Curves.easeInOut,
-          );
-          setState(() => _currentPage = 0);
-        } else {
-          _pageController.animateToPage(
-            nextPage,
-            duration: const Duration(milliseconds: 300), // Smoother transition
-            curve: Curves.easeInOut,
-          );
-          setState(() => _currentPage = nextPage);
-        }
+      if (!_pageController.hasClients || _pageController.page == null) { // Check again inside timer
+        timer.cancel();
+        return;
       }
+      final int currentPageIndex = _pageController.page!.round();
+      final int nextPage = (currentPageIndex + 1) % itemCount;
+
+      _pageController.animateToPage(
+        nextPage,
+        duration: const Duration(milliseconds: 300), // Smoother transition
+        curve: Curves.easeInOut,
+      );
+      // _currentPage is updated by PageView.onPageChanged, so no setState here for _currentPage
     });
   }
 
@@ -369,54 +387,76 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildFeaturedSlider(List<Post> posts) {
-    return SizedBox(
-      height: 200,
-      child: Stack(
-        alignment: Alignment.bottomCenter,
-        children: [
-          PageView.builder(
-            controller: _pageController,
-            itemCount: posts.length,
-            onPageChanged: (index) => setState(() => _currentPage = index),
-            itemBuilder: (context, index) {
-              final post = posts[index];
-              return GestureDetector(
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => PostDetailScreen(post: post)),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    post.imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: Colors.grey[200],
-                      child: const Icon(Icons.error),
+  Widget _buildFeaturedSlider(List<Post> posts) { // `posts` here is _currentFeaturedPosts
+    return NotificationListener<ScrollNotification>(
+      onNotification: (ScrollNotification notification) {
+        if (notification is ScrollStartNotification && notification.dragDetails != null) {
+          // User started dragging
+          _timer?.cancel();
+        } else if (notification is ScrollEndNotification) {
+          // User stopped dragging, restart timer
+          _startAutoSlide();
+        }
+        return true; // Continue bubbling notification
+      },
+      child: SizedBox(
+        height: 200,
+        child: Stack(
+          alignment: Alignment.bottomCenter,
+          children: [
+            PageView.builder(
+              controller: _pageController,
+              itemCount: posts.length, // Use the passed 'posts' which is _currentFeaturedPosts
+              onPageChanged: (index) {
+                setState(() {
+                  _currentPage = index; // This is fine for the dots indicator
+                });
+              },
+              itemBuilder: (context, index) {
+                final post = posts[index];
+                return GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => PostDetailScreen(post: post)),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: CachedNetworkImage(
+                      imageUrl: post.imageUrl,
+                      fit: BoxFit.cover,
+                      memCacheHeight: (200 * MediaQuery.of(context).devicePixelRatio).round(),
+                      memCacheWidth: ((MediaQuery.of(context).size.width * 0.9) * MediaQuery.of(context).devicePixelRatio).round(),
+                      placeholder: (context, url) => Container(
+                        color: Colors.grey[200],
+                        child: const Center(child: CircularProgressIndicator()),
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        color: Colors.grey[200],
+                        child: const Icon(Icons.error),
+                      ),
                     ),
                   ),
-                ),
-              );
-            },
-          ),
-          Positioned(
-            bottom: 10,
-            child: Row(
-              children: List.generate(posts.length, (index) {
-                return Container(
-                  width: 8,
-                  height: 8,
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _currentPage == index ? Colors.white : Colors.white.withOpacity(0.5),
-                  ),
                 );
-              }),
+              },
             ),
-          ),
-        ],
+            Positioned(
+              bottom: 10,
+              child: Row(
+                children: List.generate(posts.length, (index) { // Use posts.length for dots
+                  return Container(
+                    width: 8,
+                    height: 8,
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _currentPage == index ? Colors.white : Colors.white.withOpacity(0.5),
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
